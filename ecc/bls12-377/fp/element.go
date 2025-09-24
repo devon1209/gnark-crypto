@@ -1468,6 +1468,22 @@ func approximateForLegendre(x *Element, nBits int) uint64 {
 	return lo | mid | hi
 }
 
+// Cbrt z = ∛x (mod q)
+// if the cube root doesn't exist (x is not a cube mod q)
+// Cbrt leaves z unchanged and returns nil
+func (z *Element) Cbrt(x *Element) *Element {
+	// q ≡ 7 (mod 9)
+	// using  z ≡ x^((q+2)/9) (mod q)
+	var y, cube Element
+	y.expByCbrtExp(*x)
+	// as we didn't compute the legendre symbol, ensure we found y such that y³ = x
+	cube.Square(&y).Mul(&cube, &y)
+	if cube.Equal(x) {
+		return z.Set(&y)
+	}
+	return nil
+}
+
 // Sqrt z = √x (mod q)
 // if the square root doesn't exist (x is not a square mod q)
 // Sqrt leaves z unchanged and returns nil

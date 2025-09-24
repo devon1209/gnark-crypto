@@ -192,6 +192,16 @@ func BenchmarkElementSqrt(b *testing.B) {
 	}
 }
 
+func BenchmarkElementCbrt(b *testing.B) {
+	var a Element
+	a.SetUint64(8)
+	a.Neg(&a)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchResElement.Cbrt(&a)
+	}
+}
+
 func BenchmarkElementMul(b *testing.B) {
 	x := Element{
 		13224372171368877346,
@@ -1428,6 +1438,54 @@ func TestElementInverse(t *testing.T) {
 	properties.TestingRun(t, gopter.ConsoleReporter(false))
 	specialValueTest()
 
+}
+
+func TestElementCbrt(t *testing.T) {
+	t.Parallel()
+	parameters := gopter.DefaultTestParameters()
+	if testing.Short() {
+		parameters.MinSuccessfulTests = nbFuzzShort
+	} else {
+		parameters.MinSuccessfulTests = nbFuzz
+	}
+
+	properties := gopter.NewProperties(parameters)
+
+	genA := gen()
+
+	properties.Property("Cbrt: having the receiver as operand should output the same result", prop.ForAll(
+		func(a testPairElement) bool {
+
+			b := a.element
+
+			b.Cbrt(&a.element)
+			a.element.Cbrt(&a.element)
+			return a.element.Equal(&b)
+		},
+		genA,
+	))
+
+	properties.Property("Cbrt: operation result must Cube", prop.ForAll(
+		func(a testPairElement) bool {
+			var c, d Element
+			c.Cbrt(&a.element)
+			d.Square(&c).Mul(&d, &c)
+
+			return d.Equal(&a.element) || c.IsZero()
+		},
+		genA,
+	))
+
+	properties.Property("Cbrt: operation result must be smaller than modulus", prop.ForAll(
+		func(a testPairElement) bool {
+			var c Element
+			c.Cbrt(&a.element)
+			return c.smallerThanModulus()
+		},
+		genA,
+	))
+
+	properties.TestingRun(t, gopter.ConsoleReporter(false))
 }
 
 func TestElementSqrt(t *testing.T) {
