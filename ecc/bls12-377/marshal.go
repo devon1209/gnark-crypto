@@ -26,13 +26,13 @@ import (
 const (
 	mMask                 byte = 0b111 << 5
 	mUncompressed         byte = 0b000 << 5
-	_                     byte = 0b001 << 5 // invalid
+	mCompressedCubeRoot0  byte = 0b001 << 5
 	mUncompressedInfinity byte = 0b010 << 5
-	_                     byte = 0b011 << 5 // invalid
+	mCompressedCubeRoot1  byte = 0b011 << 5
 	mCompressedSmallest   byte = 0b100 << 5
 	mCompressedLargest    byte = 0b101 << 5
 	mCompressedInfinity   byte = 0b110 << 5
-	_                     byte = 0b111 << 5 // invalid
+	mCompressedCubeRoot2  byte = 0b111 << 5
 )
 
 // SizeOfGT represents the size in bytes that a GT element need in binary form
@@ -823,8 +823,7 @@ func (p *G1Affine) Unmarshal(buf []byte) error {
 }
 
 // Bytes returns binary representation of p
-// will store X coordinate in regular form and a parity bit
-// we follow the BLS12-381 style encoding as specified in ZCash and now IETF
+// will store Y coordinate in regular form and a parity bit
 //
 // The most significant bit, when set, indicates that the point is in compressed form. Otherwise, the point is in uncompressed form.
 //
@@ -839,15 +838,22 @@ func (p *G1Affine) Bytes() (res [SizeOfG1AffineCompressed]byte) {
 		return
 	}
 
-	msbMask := mCompressedSmallest
-	// compressed, we need to know if Y is lexicographically bigger than -Y
-	// if p.Y ">" -p.Y
-	if p.Y.LexicographicallyLargest() {
-		msbMask = mCompressedLargest
+	var x0, x1, x2 fp.Element
+	x0.Set(&p.X)
+	x1.Mul(&p.X, &thirdRootOneG1)
+	x2.Mul(&p.X, &thirdRootOneG2)
+
+	fp.Sort3(&x0, &x1, &x2)
+
+	msbMask := mCompressedCubeRoot2
+	if p.X.Equal(&x0) {
+		msbMask = mCompressedCubeRoot0
+	} else if p.X.Equal(&x1) {
+		msbMask = mCompressedCubeRoot1
 	}
 
-	// we store X  and mask the most significant word with our metadata mask
-	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[0:0+fp.Bytes]), p.X)
+	// we store Y  and mask the most significant word with our metadata mask
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[0:0+fp.Bytes]), p.Y)
 
 	res[0] |= msbMask
 
@@ -900,11 +906,6 @@ func (p *G1Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	// most significant byte
 	mData := buf[0] & mMask
 
-	// 111, 011, 001  --> invalid mask
-	if isMaskInvalid(mData) {
-		return 0, ErrInvalidEncoding
-	}
-
 	// check buffer size
 	if (mData == mUncompressed) || (mData == mUncompressedInfinity) {
 		if len(buf) < SizeOfG1AffineUncompressed {
@@ -951,38 +952,37 @@ func (p *G1Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	// we have a compressed coordinate
 	// we need to
 	// 	1. copy the buffer (to keep this method thread safe)
-	// 	2. we need to solve the curve equation to compute Y
+	// 	2. we need to solve the curve equation to compute X
 
-	var bufX [fp.Bytes]byte
-	copy(bufX[:fp.Bytes], buf[:fp.Bytes])
-	bufX[0] &= ^mMask
+	var bufY [fp.Bytes]byte
+	copy(bufY[:fp.Bytes], buf[:fp.Bytes])
+	bufY[0] &= ^mMask
 
-	// read X coordinate
-	if err := p.X.SetBytesCanonical(bufX[:fp.Bytes]); err != nil {
+	// read Y coordinate
+	if err := p.Y.SetBytesCanonical(bufY[:fp.Bytes]); err != nil {
 		return 0, err
 	}
 
-	var YSquared, Y fp.Element
+	var XCubed, X fp.Element
 
-	YSquared.Square(&p.X).Mul(&YSquared, &p.X)
-	YSquared.Add(&YSquared, &bCurveCoeff)
-	if Y.Sqrt(&YSquared) == nil {
+	XCubed.Square(&p.Y)
+	XCubed.Sub(&XCubed, &bCurveCoeff)
+	if X.Cbrt(&XCubed) == nil {
 		return 0, errors.New("invalid compressed coordinate: square root doesn't exist")
 	}
+	var x0, x1, x2 fp.Element
+	x0.Set(&X)
+	x1.Mul(&X, &thirdRootOneG1)
+	x2.Mul(&X, &thirdRootOneG2)
 
-	if Y.LexicographicallyLargest() {
-		// Y ">" -Y
-		if mData == mCompressedSmallest {
-			Y.Neg(&Y)
-		}
-	} else {
-		// Y "<=" -Y
-		if mData == mCompressedLargest {
-			Y.Neg(&Y)
-		}
+	fp.Sort3(&x0, &x1, &x2)
+
+	p.X = x0
+	if mData == mCompressedCubeRoot1 {
+		p.X = x1
+	} else if mData == mCompressedCubeRoot2 {
+		p.X = x2
 	}
-
-	p.Y = Y
 
 	// subgroup check
 	if subGroupCheck && !p.IsInSubGroup() {

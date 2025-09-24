@@ -253,6 +253,19 @@ func (z *Element) FitsOnOneWord() bool {
 	return (z[5] | z[4] | z[3] | z[2] | z[1]) == 0
 }
 
+// Sort3 takes three elements and returns them in increasing order
+func Sort3(a, b, c *Element) {
+	if a.Cmp(b) > 0 {
+		*a, *b = *b, *a
+	}
+	if b.Cmp(c) > 0 {
+		*b, *c = *c, *b
+	}
+	if a.Cmp(b) > 0 {
+		*a, *b = *b, *a
+	}
+}
+
 // Cmp compares (lexicographic order) z and x and returns:
 //
 //	-1 if z <  x

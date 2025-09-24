@@ -458,6 +458,18 @@ func TestG2AffineSerialization(t *testing.T) {
 	properties.TestingRun(t, gopter.ConsoleReporter(false))
 }
 
+// benches
+
+func BenchmarkG1AffineDecode(b *testing.B) {
+	var a G1Affine
+	a.Set(&g1GenAff)
+	buf := a.Bytes()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a.SetBytes(buf[:])
+	}
+}
+
 // define Gopters generators
 
 // GenFr generates an Fr element

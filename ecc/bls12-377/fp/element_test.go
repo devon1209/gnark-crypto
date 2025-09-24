@@ -411,6 +411,34 @@ func TestElementReduce(t *testing.T) {
 
 }
 
+func TestElementSort3(t *testing.T) {
+	t.Parallel()
+	parameters := gopter.DefaultTestParameters()
+	if testing.Short() {
+		parameters.MinSuccessfulTests = nbFuzzShort
+	} else {
+		parameters.MinSuccessfulTests = nbFuzz
+	}
+
+	properties := gopter.NewProperties(parameters)
+
+	genA := gen()
+	genB := gen()
+	genC := gen()
+
+	properties.Property("Test Sort3", prop.ForAll(
+		func(a testPairElement, b testPairElement, c testPairElement) bool {
+			Sort3(&a.element, &b.element, &c.element)
+			return a.element.Cmp(&b.element) <= 0 && b.element.Cmp(&c.element) <= 0
+		},
+		genA,
+		genB,
+		genC,
+	))
+
+	properties.TestingRun(t, gopter.ConsoleReporter(false))
+}
+
 func TestElementEqual(t *testing.T) {
 	t.Parallel()
 	parameters := gopter.DefaultTestParameters()
