@@ -189,12 +189,6 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 		}
 		nbBytes := SizeOfG1AffineCompressed
 
-		// 111, 011, 001  --> invalid mask
-		if isMaskInvalid(buf[0]) {
-			err = ErrInvalidEncoding
-			return
-		}
-
 		// most significant byte contains metadata
 		if !isCompressed(buf[0]) {
 			nbBytes = SizeOfG1AffineUncompressed
@@ -215,12 +209,6 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 			return
 		}
 		nbBytes := SizeOfG2AffineCompressed
-
-		// 111, 011, 001  --> invalid mask
-		if isMaskInvalid(buf[0]) {
-			err = ErrInvalidEncoding
-			return
-		}
 
 		// most significant byte contains metadata
 		if !isCompressed(buf[0]) {
@@ -252,12 +240,6 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 				return
 			}
 			nbBytes := SizeOfG1AffineCompressed
-
-			// 111, 011, 001  --> invalid mask
-			if isMaskInvalid(buf[0]) {
-				err = ErrInvalidEncoding
-				return
-			}
 
 			// most significant byte contains metadata
 			if !isCompressed(buf[0]) {
@@ -317,12 +299,6 @@ func (dec *Decoder) Decode(v interface{}) (err error) {
 				return
 			}
 			nbBytes := SizeOfG2AffineCompressed
-
-			// 111, 011, 001  --> invalid mask
-			if isMaskInvalid(buf[0]) {
-				err = ErrInvalidEncoding
-				return
-			}
 
 			// most significant byte contains metadata
 			if !isCompressed(buf[0]) {
@@ -404,12 +380,6 @@ func (dec *Decoder) readUint64() (r uint64, err error) {
 	}
 	r = binary.BigEndian.Uint64(buf[:])
 	return
-}
-
-// isMaskInvalid returns true if the mask is invalid
-func isMaskInvalid(msb byte) bool {
-	mData := msb & mMask
-	return ((mData == (0b111 << 5)) || (mData == (0b011 << 5)) || (mData == (0b001 << 5)))
 }
 
 func isCompressed(msb byte) bool {
