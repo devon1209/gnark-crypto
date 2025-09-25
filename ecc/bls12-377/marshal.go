@@ -842,14 +842,18 @@ func (p *G1Affine) Bytes() (res [SizeOfG1AffineCompressed]byte) {
 	x0.Set(&p.X)
 	x1.Mul(&p.X, &thirdRootOneG1)
 	x2.Mul(&p.X, &thirdRootOneG2)
-
 	fp.Sort3(&x0, &x1, &x2)
 
-	msbMask := mCompressedCubeRoot2
-	if p.X.Equal(&x0) {
+	var msbMask byte
+	switch p.X {
+	case x0:
 		msbMask = mCompressedCubeRoot0
-	} else if p.X.Equal(&x1) {
+	case x1:
 		msbMask = mCompressedCubeRoot1
+	case x2:
+		msbMask = mCompressedCubeRoot2
+	default:
+		return
 	}
 
 	// we store Y  and mask the most significant word with our metadata mask
@@ -974,14 +978,17 @@ func (p *G1Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	x0.Set(&X)
 	x1.Mul(&X, &thirdRootOneG1)
 	x2.Mul(&X, &thirdRootOneG2)
-
 	fp.Sort3(&x0, &x1, &x2)
 
-	p.X = x0
-	if mData == mCompressedCubeRoot1 {
+	switch mData {
+	case mCompressedCubeRoot0:
+		p.X = x0
+	case mCompressedCubeRoot1:
 		p.X = x1
-	} else if mData == mCompressedCubeRoot2 {
+	case mCompressedCubeRoot2:
 		p.X = x2
+	default:
+		return 0, ErrInvalidEncoding
 	}
 
 	// subgroup check

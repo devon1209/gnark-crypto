@@ -260,9 +260,9 @@ func Sort3(a, b, c *Element) {
 	}
 	if b.Cmp(c) > 0 {
 		*b, *c = *c, *b
-	}
-	if a.Cmp(b) > 0 {
-		*a, *b = *b, *a
+		if a.Cmp(b) > 0 {
+			*a, *b = *b, *a
+		}
 	}
 }
 
