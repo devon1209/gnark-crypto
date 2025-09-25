@@ -972,8 +972,9 @@ func (p *G1Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	XCubed.Square(&p.Y)
 	XCubed.Sub(&XCubed, &bCurveCoeff)
 	if X.Cbrt(&XCubed) == nil {
-		return 0, errors.New("invalid compressed coordinate: square root doesn't exist")
+		return 0, errors.New("invalid compressed coordinate: cube root doesn't exist")
 	}
+
 	var x0, x1, x2 fp.Element
 	x0.Set(&X)
 	x1.Mul(&X, &thirdRootOneG1)
@@ -1107,17 +1108,28 @@ func (p *G2Affine) Bytes() (res [SizeOfG2AffineCompressed]byte) {
 		return
 	}
 
-	msbMask := mCompressedSmallest
-	// compressed, we need to know if Y is lexicographically bigger than -Y
-	// if p.Y ">" -p.Y
-	if p.Y.LexicographicallyLargest() {
-		msbMask = mCompressedLargest
+	var x0, x1, x2 fptower.E2
+	x0.Set(&p.X)
+	x1.MulByElement(&p.X, &thirdRootOneG1)
+	x2.MulByElement(&p.X, &thirdRootOneG2)
+	x0.Sort3(&x1, &x2)
+
+	var msbMask byte
+	switch p.X {
+	case x0:
+		msbMask = mCompressedCubeRoot0
+	case x1:
+		msbMask = mCompressedCubeRoot1
+	case x2:
+		msbMask = mCompressedCubeRoot2
+	default:
+		return
 	}
 
-	// we store X  and mask the most significant word with our metadata mask
-	// p.X.A1 | p.X.A0
-	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[48:48+fp.Bytes]), p.X.A0)
-	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[0:0+fp.Bytes]), p.X.A1)
+	// we store Y  and mask the most significant word with our metadata mask
+	// p.Y.A1 | p.Y.A0
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[48:48+fp.Bytes]), p.Y.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(res[0:0+fp.Bytes]), p.Y.A1)
 
 	res[0] |= msbMask
 
@@ -1174,11 +1186,6 @@ func (p *G2Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	// most significant byte
 	mData := buf[0] & mMask
 
-	// 111, 011, 001  --> invalid mask
-	if isMaskInvalid(mData) {
-		return 0, ErrInvalidEncoding
-	}
-
 	// check buffer size
 	if (mData == mUncompressed) || (mData == mUncompressedInfinity) {
 		if len(buf) < SizeOfG2AffineUncompressed {
@@ -1233,43 +1240,45 @@ func (p *G2Affine) setBytes(buf []byte, subGroupCheck bool) (int, error) {
 	// we have a compressed coordinate
 	// we need to
 	// 	1. copy the buffer (to keep this method thread safe)
-	// 	2. we need to solve the curve equation to compute Y
+	// 	2. we need to solve the curve equation to compute X
 
-	var bufX [fp.Bytes]byte
-	copy(bufX[:fp.Bytes], buf[:fp.Bytes])
-	bufX[0] &= ^mMask
+	var bufY [fp.Bytes]byte
+	copy(bufY[:fp.Bytes], buf[:fp.Bytes])
+	bufY[0] &= ^mMask
 
-	// read X coordinate
-	// p.X.A1 | p.X.A0
-	if err := p.X.A1.SetBytesCanonical(bufX[:fp.Bytes]); err != nil {
+	// read Y coordinate
+	// p.Y.A1 | p.Y.A0
+	if err := p.Y.A1.SetBytesCanonical(bufY[:fp.Bytes]); err != nil {
 		return 0, err
 	}
-	if err := p.X.A0.SetBytesCanonical(buf[fp.Bytes : fp.Bytes*2]); err != nil {
+	if err := p.Y.A0.SetBytesCanonical(buf[fp.Bytes : fp.Bytes*2]); err != nil {
 		return 0, err
 	}
 
-	var YSquared, Y fptower.E2
+	var XCubed, X fptower.E2
 
-	YSquared.Square(&p.X).Mul(&YSquared, &p.X)
-	YSquared.Add(&YSquared, &bTwistCurveCoeff)
-	if YSquared.Legendre() == -1 {
-		return 0, errors.New("invalid compressed coordinate: square root doesn't exist")
-	}
-	Y.Sqrt(&YSquared)
-
-	if Y.LexicographicallyLargest() {
-		// Y ">" -Y
-		if mData == mCompressedSmallest {
-			Y.Neg(&Y)
-		}
-	} else {
-		// Y "<=" -Y
-		if mData == mCompressedLargest {
-			Y.Neg(&Y)
-		}
+	XCubed.Square(&p.Y)
+	XCubed.Sub(&XCubed, &bTwistCurveCoeff)
+	if X.Cbrt(&XCubed) == nil {
+		return 0, errors.New("invalid compressed coordinate: cube root doesn't exist")
 	}
 
-	p.Y = Y
+	var x0, x1, x2 fptower.E2
+	x0.Set(&X)
+	x1.MulByElement(&X, &thirdRootOneG1)
+	x2.MulByElement(&X, &thirdRootOneG2)
+	x0.Sort3(&x1, &x2)
+
+	switch mData {
+	case mCompressedCubeRoot0:
+		p.X = x0
+	case mCompressedCubeRoot1:
+		p.X = x1
+	case mCompressedCubeRoot2:
+		p.X = x2
+	default:
+		return 0, ErrInvalidEncoding
+	}
 
 	// subgroup check
 	if subGroupCheck && !p.IsInSubGroup() {

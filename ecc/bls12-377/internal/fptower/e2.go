@@ -41,6 +41,19 @@ func (z *E2) Cmp(x *E2) int {
 	return z.A0.Cmp(&x.A0)
 }
 
+// Sort3 takes three elements and returns them in increasing order
+func (z *E2) Sort3(x, y *E2) {
+	if z.Cmp(x) > 0 {
+		*z, *x = *x, *z
+	}
+	if x.Cmp(y) > 0 {
+		*x, *y = *y, *x
+		if z.Cmp(x) > 0 {
+			*z, *x = *x, *z
+		}
+	}
+}
+
 // LexicographicallyLargest returns true if this element is strictly lexicographically
 // larger than its negation, false otherwise
 func (z *E2) LexicographicallyLargest() bool {
@@ -198,6 +211,22 @@ func (z *E2) Exp(x E2, k *big.Int) *E2 {
 	}
 
 	return z
+}
+
+// Cbrt z = ∛x (mod q)
+// if the cube root doesn't exist (x is not a cube mod q)
+// Cbrt leaves z unchanged and returns nil
+func (z *E2) Cbrt(x *E2) *E2 {
+	// q² ≡ 4 (mod 9)
+	// using  z ≡ x^((5q²-5)/9) (mod q)
+	var y, cube E2
+	y.expByCbrtExp(x)
+	// as we didn't compute the cubic residue symbol, ensure we found y such that y³ = x
+	cube.Square(&y).Mul(&cube, &y)
+	if cube.Equal(x) {
+		return z.Set(&y)
+	}
+	return nil
 }
 
 // Sqrt sets z to the square root of and returns z

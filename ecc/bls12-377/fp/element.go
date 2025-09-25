@@ -1489,7 +1489,7 @@ func (z *Element) Cbrt(x *Element) *Element {
 	// using  z ≡ x^((q+2)/9) (mod q)
 	var y, cube Element
 	y.expByCbrtExp(*x)
-	// as we didn't compute the legendre symbol, ensure we found y such that y³ = x
+	// as we didn't compute the cubic residue symbol, ensure we found y such that y³ = x
 	cube.Square(&y).Mul(&cube, &y)
 	if cube.Equal(x) {
 		return z.Set(&y)
